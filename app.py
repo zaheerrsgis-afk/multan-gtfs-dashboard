@@ -1,119 +1,84 @@
 import streamlit as st
 import pandas as pd
+import folium
+from streamlit_folium import st_folium
 
-# ---------------- PAGE SETTINGS -------------------
-st.set_page_config(
-    page_title="Multan Public Transport Dashboard",
-    layout="wide"
-)
+st.set_page_config(page_title="Multan Public Transport Dashboard", layout="wide")
 
-# ---------------- LOAD GTFS FILES -------------------
+# Load Data
 @st.cache_data
 def load_data():
     routes = pd.read_csv("routes.txt")
     stops = pd.read_csv("stops.txt")
-    trips = pd.read_csv("trips.txt")
     stop_times = pd.read_csv("stop_times.txt")
+    trips = pd.read_csv("trips.txt")
+    return routes, stops, stop_times, trips
 
-    # Convert lat/lon to float for map
-    stops["stop_lat"] = stops["stop_lat"].astype(float)
-    stops["stop_lon"] = stops["stop_lon"].astype(float)
+routes, stops, stop_times, trips = load_data()
 
-    return routes, stops, trips, stop_times
+# Header
+st.title("🚌 Multan Public Transport Dashboard")
+st.caption("Live GTFS Data • Powered by Punjab IT Board")
 
-routes, stops, trips, stop_times = load_data()
+# KPI section
+col1, col2, col3, col4 = st.columns(4)
 
-# ---------------- HEADER -------------------
-st.markdown("""
-<h1 style='text-align:center; color:#004AAD;'>🚌 Multan Public Transport Dashboard</h1>
-<h4 style='text-align:center;'>Live GTFS Data • Powered by Punjab IT Board</h4>
-<hr>
-""", unsafe_allow_html=True)
+col1.metric("Total Routes", len(routes))
+col2.metric("Total Trips", len(trips))
+col3.metric("Total Stops", len(stops))
+col4.metric("Stop Times Records", len(stop_times))
 
-# ---------------- METRICS -------------------
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total Routes", len(routes))
-c2.metric("Total Trips", len(trips))
-c3.metric("Total Stops", len(stops))
-c4.metric("Stop Times", len(stop_times))
+st.markdown("---")
 
-st.markdown("<hr>", unsafe_allow_html=True)
+# ROUTE LIST
+st.header("📋 Routes List")
 
-# ---------------- ROUTES LIST (CLEAN) -------------------
-st.subheader("📘 Routes List")
+# Only show required columns
+clean_routes = routes[["route_id", "route_short_name"]].copy()
+clean_routes["Stops"] = ""
+clean_routes["Timings"] = ""
 
-clean_routes = pd.DataFrame()
-clean_routes["Route ID"] = routes["route_id"]
+# Display table row by row
+for index, row in clean_routes.iterrows():
+    c1, c2, c3, c4 = st.columns([2, 2, 1, 1])
+    
+    c1.write(row["route_id"])
+    c2.write(row["route_short_name"])
 
-clean_routes["Stops"] = [
-    f"""
-    <a href='/?route={rid}&tab=stops' 
-       style='background:#007bff; padding:6px 12px; color:white; 
-       border-radius:6px; text-decoration:none; font-weight:600;'>
-       View Stops
-    </a>
-    """
-    for rid in routes["route_id"]
-]
+    show_stops = c3.button("View Stops", key=f"stops_{index}")
+    show_times = c4.button("View Timings", key=f"times_{index}")
 
-clean_routes["Timings"] = [
-    f"""
-    <a href='/?route={rid}&tab=timings' 
-       style='background:#28a745; padding:6px 12px; color:white; 
-       border-radius:6px; text-decoration:none; font-weight:600;'>
-       View Timings
-    </a>
-    """
-    for rid in routes["route_id"]
-]
+    # SHOW STOPS ON MAP
+    if show_stops:
+        st.subheader(f"🗺 Stops for Route {row['route_id']}")
+        route_trips = trips[trips["route_id"] == row["route_id"]]["trip_id"].unique()
+        route_stop_times = stop_times[stop_times["trip_id"].isin(route_trips)]
+        route_stops = stops[stops["stop_id"].isin(route_stop_times["stop_id"].unique())]
 
-st.write(clean_routes.to_html(escape=False, index=False), unsafe_allow_html=True)
+        # Create Map
+        if len(route_stops) > 0:
+            m = folium.Map(location=[route_stops["stop_lat"].mean(), route_stops["stop_lon"].mean()], zoom_start=12)
 
-# ---------------- URL PARAM HANDLING -------------------
-query = st.experimental_get_query_params()
+            for _, stop in route_stops.iterrows():
+                folium.Marker(
+                    [stop["stop_lat"], stop["stop_lon"]],
+                    popup=stop["stop_name"],
+                    icon=folium.Icon(color="blue")
+                ).add_to(m)
 
-if "route" in query:
-    selected_route = query["route"][0]
-    selected_tab = query.get("tab", ["stops"])[0]
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.subheader(f"🚌 Route: {selected_route}")
-
-    # Get trip IDs for this route
-    r_trips = trips[trips["route_id"] == selected_route]["trip_id"].unique()
-
-    # Get stop IDs
-    stop_ids = stop_times[stop_times["trip_id"].isin(r_trips)]["stop_id"].unique()
-    route_stops = stops[stops["stop_id"].isin(stop_ids]]
-
-    # ---------------- SHOW STOPS -------------------
-    if selected_tab == "stops":
-        st.markdown("## 📍 Route Stops (Map + List)")
-
-        if len(route_stops) == 0:
-            st.warning("No stops found for this route.")
+            st_folium(m, width=700, height=500)
         else:
-            # Prepare map dataframe
-            map_df = pd.DataFrame({
-                "lat": route_stops["stop_lat"],
-                "lon": route_stops["stop_lon"]
-            })
+            st.warning("No stops found for this route.")
 
-            # Show map
-            st.map(map_df)
+    # SHOW TIMINGS TABLE
+    if show_times:
+        st.subheader(f"⏱ Timings for Route {row['route_id']}")
 
-            # Show table
-            st.dataframe(
-                route_stops[["stop_id", "stop_name", "stop_lat", "stop_lon"]],
-                use_container_width=True
-            )
+        route_trips = trips[trips["route_id"] == row["route_id"]]["trip_id"].unique()
+        selected_times = stop_times[stop_times["trip_id"].isin(route_trips)]
 
-    # ---------------- SHOW TIMINGS -------------------
-    if selected_tab == "timings":
-        st.markdown("## 🕒 Stop Timings")
+        merged = selected_times.merge(stops, on="stop_id", how="left")
+        merged = merged[["stop_name", "arrival_time", "departure_time"]]
 
-        r_times = stop_times[stop_times["trip_id"].isin(r_trips)]
+        st.dataframe(merged, use_container_width=True)
 
-        clean_times = r_times[["trip_id", "stop_id", "stop_sequence"]]
-
-        st.dataframe(clean_times, use_container_width=True)
