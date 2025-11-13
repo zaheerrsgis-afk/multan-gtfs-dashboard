@@ -129,16 +129,23 @@ if st.session_state.show_stops:
         st.warning("No stops found for this route.")
 
 # ------------------------------------------------------------
-# SHOW TIMINGS (WITHOUT departure_time)
+# SHOW TIMINGS (WITHOUT departure_time + direction column)
 # ------------------------------------------------------------
 if st.session_state.show_times:
     st.subheader("⏱ Stop Timings")
 
-    timings_table = route_times.merge(stops, on="stop_id", how="left")
-    
-    # REMOVE departure_time column
+    timings_table = route_times.merge(trips, on="trip_id", how="left")
+    timings_table = timings_table.merge(stops, on="stop_id", how="left")
+
+    # Add forward/backward readable column
+    timings_table["direction"] = timings_table["direction_id"].apply(
+        lambda x: "Forward" if x == 0 else "Backward"
+    )
+
+    # Select clean columns
     timings_table = timings_table[
-        ["trip_id", "stop_id", "stop_name", "arrival_time"]
+        ["trip_id", "stop_id", "stop_name", "arrival_time", "direction"]
     ]
 
     st.dataframe(timings_table, use_container_width=True)
+
