@@ -3,149 +3,114 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 
-# ------------------------------------------------------------
-# PAGE CONFIG
-# ------------------------------------------------------------
-st.set_page_config(
-    page_title="Multan Public Transport Dashboard",
-    layout="wide",
-)
+st.set_page_config(page_title="Multan GTFS Dashboard", layout="wide")
 
-st.markdown(
-    """
-    <h1 style='text-align:center; color:#005be4;'>🚌 Multan Public Transport Dashboard</h1>
-    <p style='text-align:center; font-size:18px;'>Live GTFS Data • No Database Required • Powered by Punjab IT Board</p>
-    <br>
-    """,
-    unsafe_allow_html=True
-)
-
-# ------------------------------------------------------------
+# -------------------------------------------------------------
 # LOAD GTFS FILES
-# ------------------------------------------------------------
-routes = pd.read_csv("routes.txt")
-trips = pd.read_csv("trips.txt")
-stops = pd.read_csv("stops.txt")
-stop_times = pd.read_csv("stop_times.txt")
+# -------------------------------------------------------------
+@st.cache_data
+def load_data():
+    routes = pd.read_csv("routes.txt")
+    stops = pd.read_csv("stops.txt")
+    trips = pd.read_csv("trips.txt")
+    stop_times = pd.read_csv("stop_times.txt")
 
-# ------------------------------------------------------------
-# METRICS ROW
-# ------------------------------------------------------------
+    # Convert times safely
+    for col in ["arrival_time", "departure_time"]:
+        if col in stop_times:
+            stop_times[col] = stop_times[col].astype(str)
+
+    return routes, stops, trips, stop_times
+
+
+routes, stops, trips, stop_times = load_data()
+
+# -------------------------------------------------------------
+# TITLE
+# -------------------------------------------------------------
+st.title("🚍 Multan Public Transport Dashboard")
+st.caption("Live GTFS Viewer • Punjab IT Board • Multan Metro & Feeder Routes")
+
+# -------------------------------------------------------------
+# SUMMARY CARDS
+# -------------------------------------------------------------
 col1, col2, col3, col4 = st.columns(4)
-
-col1.metric("Total Routes", len(routes))
-col2.metric("Total Trips", len(trips))
-col3.metric("Total Stops", len(stops))
-col4.metric("Stop Time Records", len(stop_times))
-
-st.markdown("---")
-
-# ------------------------------------------------------------
-# ROUTES TABLE
-# ------------------------------------------------------------
-st.subheader("📋 Routes List")
-
-clean_routes = routes[["route_id", "route_short_name", "route_long_name"]]
-
-st.dataframe(clean_routes, use_container_width=True)
+col1.metric("Routes", len(routes))
+col2.metric("Stops", len(stops))
+col3.metric("Trips", len(trips))
+col4.metric("Stop Timings", len(stop_times))
 
 st.markdown("---")
 
-# ------------------------------------------------------------
-# SESSION STATE FIX FOR MAP HIDING ISSUE
-# ------------------------------------------------------------
-if "show_stops" not in st.session_state:
-    st.session_state.show_stops = False
+# -------------------------------------------------------------
+# ROUTE SELECTION
+# -------------------------------------------------------------
+st.header("📋 Select a Route")
 
-if "show_times" not in st.session_state:
-    st.session_state.show_times = False
+route_list = dict(zip(routes["route_long_name"], routes["route_id"]))
 
-def show_stops_action():
-    st.session_state.show_stops = True
-    st.session_state.show_times = False
+selected_route_name = st.selectbox("Choose Route", list(route_list.keys()))
+selected_route_id = route_list[selected_route_name]
 
-def show_times_action():
-    st.session_state.show_times = True
-    st.session_state.show_stops = False
+# Filter data
+route_trips = trips[trips.route_id == selected_route_id]
+route_trip_ids = route_trips.trip_id.tolist()
+route_stop_times = stop_times[stop_times.trip_id.isin(route_trip_ids)]
 
-# ------------------------------------------------------------
-# ROUTE SELECTOR
-# ------------------------------------------------------------
-st.subheader("🔍 Route Explorer")
+# Merge with stops
+route_stops = route_stop_times.merge(stops, on="stop_id", how="left")
 
-selected_route = st.selectbox("Choose a Route:", clean_routes["route_id"].unique())
+# Add direction name
+route_stops["direction"] = route_stops["direction_id"].apply(lambda x: "Forward" if x == 0 else "Backward")
 
-route_row = routes[routes["route_id"] == selected_route].iloc[0]
+# Clean columns for STOP LIST
+clean_stops = route_stops[["stop_id", "stop_name", "stop_lat", "stop_lon", "direction"]].drop_duplicates()
 
-st.markdown(
-    f"""
-    <h4 style='color:#005be4;'>Route: {route_row['route_short_name']}</h4>
-    <p>{route_row['route_long_name']}</p>
-    """,
-    unsafe_allow_html=True
-)
+# Clean columns for TIMINGS (NO departure_time)
+clean_times = route_stops[["stop_name", "arrival_time", "direction"]].copy()
 
-colA, colB = st.columns(2)
+# -------------------------------------------------------------
+# DISPLAY STOPS LIST
+# -------------------------------------------------------------
+st.subheader(f"🚏 Stops for **{selected_route_name}**")
 
-with colA:
-    st.button("📍 View Stops", on_click=show_stops_action, use_container_width=True)
+st.dataframe(clean_stops.sort_values(["direction", "stop_name"]), use_container_width=True)
 
-with colB:
-    st.button("⏱ View Timings", on_click=show_times_action, use_container_width=True)
+# -------------------------------------------------------------
+# MAP OF ROUTE STOPS
+# -------------------------------------------------------------
+st.subheader("🗺 Route Map")
 
-# ------------------------------------------------------------
-# LOGIC TO FIND STOPS & TRIPS
-# ------------------------------------------------------------
-route_trips = trips[trips["route_id"] == selected_route]["trip_id"].unique()
-stop_ids = stop_times[stop_times["trip_id"].isin(route_trips)]["stop_id"].unique()
+# Center of stops
+center_lat = clean_stops["stop_lat"].mean()
+center_lon = clean_stops["stop_lon"].mean()
 
-route_stops = stops[stops["stop_id"].isin(stop_ids)]
-route_times = stop_times[stop_times["trip_id"].isin(route_trips)]
+m = folium.Map(location=[center_lat, center_lon], zoom_start=12)
 
-# ------------------------------------------------------------
-# SHOW MAP OF STOPS
-# ------------------------------------------------------------
-if st.session_state.show_stops:
-    st.subheader("🗺 Stops on Map")
+# Marker colors
+def color_by_dir(d):
+    return "blue" if d == "Forward" else "red"
 
-    if len(route_stops) > 0:
-        m = folium.Map(
-            location=[route_stops["stop_lat"].mean(), route_stops["stop_lon"].mean()],
-            zoom_start=12
-        )
+# Add stops
+for _, row in clean_stops.iterrows():
+    folium.CircleMarker(
+        location=[row["stop_lat"], row["stop_lon"]],
+        radius=6,
+        color=color_by_dir(row["direction"]),
+        fill=True,
+        fill_color=color_by_dir(row["direction"]),
+        popup=f"{row['stop_name']} ({row['direction']})",
+    ).add_to(m)
 
-        for _, stop in route_stops.iterrows():
-            folium.Marker(
-                [stop["stop_lat"], stop["stop_lon"]],
-                popup=stop["stop_name"],
-                icon=folium.Icon(color="red")
-            ).add_to(m)
+st_folium(m, width=900, height=500)
 
-        st_folium(m, width=700, height=500)
+# -------------------------------------------------------------
+# STOP TIMINGS (REMOVE departure_time)
+# -------------------------------------------------------------
+st.subheader(f"⏱ Stop Timings for **{selected_route_name}**")
 
-        st.dataframe(route_stops[["stop_id", "stop_name"]], use_container_width=True)
+clean_times = clean_times.sort_values(["direction", "arrival_time"])
+st.dataframe(clean_times, use_container_width=True)
 
-    else:
-        st.warning("No stops found for this route.")
-
-# ------------------------------------------------------------
-# SHOW TIMINGS (WITHOUT departure_time + direction column)
-# ------------------------------------------------------------
-if st.session_state.show_times:
-    st.subheader("⏱ Stop Timings")
-
-    timings_table = route_times.merge(trips, on="trip_id", how="left")
-    timings_table = timings_table.merge(stops, on="stop_id", how="left")
-
-    # Add forward/backward readable column
-    timings_table["direction"] = timings_table["direction_id"].apply(
-        lambda x: "Forward" if x == 0 else "Backward"
-    )
-
-    # Select clean columns
-    timings_table = timings_table[
-        ["trip_id", "stop_id", "stop_name", "arrival_time", "direction"]
-    ]
-
-    st.dataframe(timings_table, use_container_width=True)
-
+st.markdown("---")
+st.caption("© Punjab IT Board • Multan GTFS Dashboard 2025")
