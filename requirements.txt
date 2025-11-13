@@ -1,5 +1,2 @@
 streamlit
-psycopg2-binary
 pandas
-folium
-streamlit-folium
