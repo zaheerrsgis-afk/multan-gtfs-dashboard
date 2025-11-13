@@ -1,0 +1,21 @@
+route_id,route_short_name,route_long_name,route_desc,route_type,route_color
+MMB1,MBM,MetroBusMultan,"The ""MetroBus"" route travels from Bahuddin Zakariya University (BZU) to Chowk Kumaharan.""",1,5eb539
+FR01,FRM01,FeederBusMultan_01,"The ""FeederBus"" route travels from Dehhr Chowk to Dera Adda.""",3,eb2618
+FR01B,FRM01B,FeederBusMultan_01B,"The ""FeederBus"" route travels from E-Khidmat Center to Dera Adda Via Bakhtawar Ameen & Women University.""",3,eb2618
+FR01C,FRM01C,FeederBusMultan_01C,"The ""FeederBus"" route travels from E-Khidmat Center To Dera Adda Via Dehar Chowk.""",3,eb2618
+FR02,FRM02,FeederBusMultan_02,"The ""FeederBus"" route travels from Suraj Miani to Qasim Fort.""",3,eb2618
+FR03,FRM03,FeederBusMultan_03,"The ""FeederBus"" route travels from Ibn-e-Sina Hospital to Ghanta Ghar.""",3,eb2618
+FR03B,FRM03B,FeederBusMultan_03B,"The ""FeederBus"" route travels from Qadir Pur Rawan To Ghanta Ghar.""",3,eb2618
+FR04,FRM04,FeederBusMultan_04,"The ""FeederBus"" route travels from Nag Shah to Vehari Chowk.""",3,eb2618
+FR04B,FRM04B,FeederBusMultan_04B,"The ""FeederBus"" route travels from Adda Shujaabad to Dear Adda Via Nag Shah.""",3,eb2618
+FR06,FRM06,FeederBusMultan_06,"The ""FeederBus"" route travels from Adda Makhdoom Rashid to Haram Gate.""",3,eb2618
+FR07B,FRM07B,FeederBusMultan_07B,"The ""FeederBus"" route travels from 32 Pull To Vehari Chowk.""",3,eb2618
+FR08B,FRM08B,FeederBusMultan_08B,"The ""FeederBus"" route travels from Basti Malook To Vehari Chowk.""",3,eb2618
+FR09,FRM09,FeederBusMultan_09,"The ""FeederBus"" route travels from Nag Shah to Chungi no 9.""",3,eb2618
+FR09B,FRM09B,FeederBusMultan_09B,"The ""FeederBus"" route travels from Nadirabad Phatak To chungi no 9.""",3,eb2618
+FR09C,FRM09C,FeederBusMultan_09C,"The ""FeederBus"" route travels from Chungi No 9 to Nadrabad (Via Ali Wala).""",3,eb2618
+FR10,FRM10,FeederBusMultan_10,"The ""FeederBus"" route travels from Faiz Aam Chowk to Chungi no 9.""",3,eb2618
+FR11,FRM11,FeederBusMultan_11,"The ""FeederBus"" route travels from CMH Chowk to Vehari Chowk via Dera Adda.""",3,eb2618
+FR12,FRM12,FeederBusMultan_12,"The ""FeederBus"" route travels from Airport To Railway Station.""",3,eb2618
+FR30,FRM30,FeederBusMultan_30,"The ""FeederBus"" route travels from Sher Shah Bypass to Dera Adda.""",3,eb2618
+FR39,FRM39,FeederBusMultan_39,"The ""FeederBus"" route travels from Northern Bypass to Dars Chawan.""",3,eb2618
