@@ -4,7 +4,7 @@ import pandas as pd
 st.set_page_config(page_title="Multan GTFS Dashboard", layout="wide")
 
 st.title("🚌 Multan Public Transport Dashboard")
-st.caption("Live GTFS Data • No Database Required • Powered by Punjab IT Board")
+st.caption("Live GTFS Data • Powered by Punjab IT Board")
 
 # ---------------------------
 # Load GTFS CSV Files
@@ -44,3 +44,4 @@ st.dataframe(stops, use_container_width=True)
 
 st.subheader("Stop Times")
 st.dataframe(stop_times, use_container_width=True)
+
