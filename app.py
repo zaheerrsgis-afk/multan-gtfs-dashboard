@@ -52,7 +52,24 @@ st.dataframe(clean_routes, use_container_width=True)
 st.markdown("---")
 
 # ------------------------------------------------------------
-# ROUTE DETAILS (Stops + Timings)
+# SESSION STATE FIX FOR MAP HIDING ISSUE
+# ------------------------------------------------------------
+if "show_stops" not in st.session_state:
+    st.session_state.show_stops = False
+
+if "show_times" not in st.session_state:
+    st.session_state.show_times = False
+
+def show_stops_action():
+    st.session_state.show_stops = True
+    st.session_state.show_times = False
+
+def show_times_action():
+    st.session_state.show_times = True
+    st.session_state.show_stops = False
+
+# ------------------------------------------------------------
+# ROUTE SELECTOR
 # ------------------------------------------------------------
 st.subheader("🔍 Route Explorer")
 
@@ -71,10 +88,10 @@ st.markdown(
 colA, colB = st.columns(2)
 
 with colA:
-    show_stops = st.button("📍 View Stops", use_container_width=True)
+    st.button("📍 View Stops", on_click=show_stops_action, use_container_width=True)
 
 with colB:
-    show_times = st.button("⏱ View Timings", use_container_width=True)
+    st.button("⏱ View Timings", on_click=show_times_action, use_container_width=True)
 
 # ------------------------------------------------------------
 # LOGIC TO FIND STOPS & TRIPS
@@ -88,17 +105,15 @@ route_times = stop_times[stop_times["trip_id"].isin(route_trips)]
 # ------------------------------------------------------------
 # SHOW MAP OF STOPS
 # ------------------------------------------------------------
-if show_stops:
+if st.session_state.show_stops:
     st.subheader("🗺 Stops on Map")
 
     if len(route_stops) > 0:
-        # Create map
         m = folium.Map(
             location=[route_stops["stop_lat"].mean(), route_stops["stop_lon"].mean()],
             zoom_start=12
         )
 
-        # Add markers
         for _, stop in route_stops.iterrows():
             folium.Marker(
                 [stop["stop_lat"], stop["stop_lon"]],
@@ -108,21 +123,22 @@ if show_stops:
 
         st_folium(m, width=700, height=500)
 
-        # Also show table
         st.dataframe(route_stops[["stop_id", "stop_name"]], use_container_width=True)
 
     else:
         st.warning("No stops found for this route.")
 
 # ------------------------------------------------------------
-# SHOW TIMINGS LIST
+# SHOW TIMINGS (WITHOUT departure_time)
 # ------------------------------------------------------------
-if show_times:
+if st.session_state.show_times:
     st.subheader("⏱ Stop Timings")
 
     timings_table = route_times.merge(stops, on="stop_id", how="left")
+    
+    # REMOVE departure_time column
     timings_table = timings_table[
-        ["trip_id", "stop_id", "stop_name", "arrival_time", "departure_time"]
+        ["trip_id", "stop_id", "stop_name", "arrival_time"]
     ]
 
     st.dataframe(timings_table, use_container_width=True)
