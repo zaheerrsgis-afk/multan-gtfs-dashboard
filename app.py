@@ -14,7 +14,7 @@ st.set_page_config(
 st.markdown(
     """
     <h1 style='text-align:center; color:#005be4;'>🚌 Multan Public Transport Dashboard</h1>
-    <p style='text-align:center; font-size:18px;'>Live GTFS Data • No Database Required • Powered by Punjab IT Board</p>
+    <p style='text-align:center; font-size:18px;'>Live GTFS Data • Powered by Punjab IT Board</p>
     <br>
     """,
     unsafe_allow_html=True
@@ -178,4 +178,5 @@ if st.session_state.show_times:
     timings_table = timings_table.sort_values(["direction", "trip_id", "arrival_time"])
 
     st.dataframe(timings_table, use_container_width=True)
+
 
