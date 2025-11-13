@@ -1,129 +1,116 @@
 import streamlit as st
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
 
-# Load CSV GTFS files
-routes = pd.read_csv("routes.txt")
-stops = pd.read_csv("stops.txt")
-trips = pd.read_csv("trips.txt")
-stop_times = pd.read_csv("stop_times.txt")
+# ---------------- PAGE SETTINGS -------------------
+st.set_page_config(
+    page_title="Multan Public Transport Dashboard",
+    layout="wide"
+)
 
-st.set_page_config(page_title="Multan Public Transport Dashboard", layout="wide")
+# ---------------- LOAD GTFS FILES -------------------
+@st.cache_data
+def load_data():
+    routes = pd.read_csv("routes.txt")
+    stops = pd.read_csv("stops.txt")
+    trips = pd.read_csv("trips.txt")
+    stop_times = pd.read_csv("stop_times.txt")
+    return routes, stops, trips, stop_times
 
-# ------------------- CUSTOM CSS ---------------------
+routes, stops, trips, stop_times = load_data()
+
+# ---------------- HEADER -------------------
 st.markdown("""
-<style>
-
-h1 {
-    color: #0056b3;
-    font-weight: 700;
-}
-
-.stat-card {
-    background: #ffffff;
-    padding: 25px;
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-    text-align: center;
-    border-left: 6px solid #0d6efd;
-}
-
-.stat-number {
-    font-size: 36px;
-    font-weight: 700;
-    color: #0d6efd;
-}
-
-.section-title {
-    font-size: 26px;
-    margin-top: 35px;
-    color: #0056b3;
-    font-weight: 600;
-}
-
-.action-btn {
-    background-color: #0056b3;
-    padding: 8px 15px;
-    color: white !important;
-    border-radius: 6px;
-    text-decoration: none;
-    font-weight: 500;
-}
-.action-btn:hover {
-    background-color: #003f82;
-    color: white !important;
-}
-
-</style>
+<h1 style='text-align:center; color:#004AAD;'>🚌 Multan Public Transport Dashboard</h1>
+<h4 style='text-align:center;'>Live GTFS Data • Powered by Punjab IT Board</h4>
+<hr>
 """, unsafe_allow_html=True)
 
-# ------------------- HEADER ---------------------
-st.markdown("<h1>🚍 Multan Public Transport Dashboard</h1>", unsafe_allow_html=True)
-st.write("Live GTFS Data • No Database Required • Powered by Punjab IT Board")
-st.markdown("---")
+# ---------------- METRIC BOXES -------------------
+c1, c2, c3, c4 = st.columns(4)
 
-# ------------------- STATS CARDS ---------------------
-col1, col2, col3, col4 = st.columns(4)
-col1.markdown(f"<div class='stat-card'><div class='stat-number'>{len(routes)}</div>Total Routes</div>", unsafe_allow_html=True)
-col2.markdown(f"<div class='stat-card'><div class='stat-number'>{len(trips)}</div>Total Trips</div>", unsafe_allow_html=True)
-col3.markdown(f"<div class='stat-card'><div class='stat-number'>{len(stops)}</div>Total Stops</div>", unsafe_allow_html=True)
-col4.markdown(f"<div class='stat-card'><div class='stat-number'>{len(stop_times)}</div>Stop Timings</div>", unsafe_allow_html=True)
+c1.metric("Total Routes", len(routes))
+c2.metric("Total Trips", len(trips))
+c3.metric("Total Stops", len(stops))
+c4.metric("Stop Times", len(stop_times))
 
-# ------------------- ROUTES LIST ---------------------
-st.markdown("<div class='section-title'>📋 Routes List</div>", unsafe_allow_html=True)
+st.markdown("<hr>", unsafe_allow_html=True)
 
-def btn(label, route_id):
-    return f"<a class='action-btn' href='?route={route_id}'>{label}</a>"
+# ---------------- ROUTES TABLE -------------------
+st.subheader("📘 Routes List")
 
-# Clean routes table
-routes_table = pd.DataFrame()
-routes_table["Route ID"] = routes["route_id"]
-routes_table["Route Name"] = routes["route_long_name"]
-routes_table["Stops"] = routes["route_id"].apply(lambda r: btn("View Stops", r))
-routes_table["Timings"] = routes["route_id"].apply(lambda r: btn("View Timings", r))
+# Table with only route_id + buttons
+clean_routes = pd.DataFrame()
+clean_routes["route_id"] = routes["route_id"]
 
-st.write(routes_table.to_html(escape=False, index=False), unsafe_allow_html=True)
+# Stylish buttons (blue/green)
+clean_routes["Stops"] = [
+    f"<a href='?route={rid}&tab=stops' style='
+        padding:6px 12px;
+        background:#0066FF;
+        color:white;
+        border-radius:6px;
+        text-decoration:none;
+        font-weight:600;'>View Stops</a>"
+    for rid in routes["route_id"]
+]
 
-# ------------------- ROUTE SELECTED ---------------------
-query = st.query_params
+clean_routes["Timings"] = [
+    f"<a href='?route={rid}&tab=timings' style='
+        padding:6px 12px;
+        background:#009a44;
+        color:white;
+        border-radius:6px;
+        text-decoration:none;
+        font-weight:600;'>View Timings</a>"
+    for rid in routes["route_id"]
+]
+
+# Display table
+st.write(clean_routes.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+# -------------- ROUTE SELECTION (FROM URL) -----------------
+query = st.experimental_get_query_params()
 
 if "route" in query:
-    r_id = query["route"]
+    selected_route = query["route"][0]
+    selected_tab = query.get("tab", ["stops"])[0]
 
-    st.markdown(f"<div class='section-title'>🛑 Stops for Route: <b>{r_id}</b></div>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.subheader(f"🚌 Route: {selected_route}")
 
-    trip_ids = trips[trips["route_id"] == r_id]["trip_id"]
+    # Filter trips of selected route
+    route_trip_ids = trips[trips["route_id"] == selected_route]["trip_id"].unique()
 
-    df = stop_times[stop_times["trip_id"].isin(trip_ids)].merge(stops, on="stop_id")
+    # Filter stops used by these trips
+    used_stop_ids = stop_times[stop_times["trip_id"].isin(route_trip_ids)]["stop_id"].unique()
+    route_stops = stops[stops["stop_id"].isin(used_stop_ids)]
 
-    # Smart forward/backward detection
-    median_seq = df["stop_sequence"].median()
-    df["Direction"] = df["stop_sequence"].apply(
-          lambda x: "Forward (F)" if x <= median_seq else "Backward (B)"
-    )
+    # ---------------- STOPS TAB -----------------
+    if selected_tab == "stops":
 
-    # ------------ CLEAN STOPS TABLE ------------
-    stops_clean = df[["stop_name", "stop_lat", "stop_lon", "Direction"]].drop_duplicates()
-    st.write(stops_clean)
+        st.markdown("### 📍 Route Stops (Map + List)")
 
-    # ------------ MAP WITH ALL STOPS ------------
-    st.markdown("<div class='section-title'>🗺️ Route Map</div>", unsafe_allow_html=True)
-    
-    m = folium.Map(location=[30.2, 71.5], zoom_start=12)
+        # Prepare map df
+        map_df = route_stops[["stop_lat", "stop_lon"]].rename(
+            columns={"stop_lat": "lat", "stop_lon": "lon"}
+        )
 
-    for _, row in stops_clean.iterrows():
-        folium.CircleMarker(
-            location=[row["stop_lat"], row["stop_lon"]],
-            radius=5,
-            color="blue" if "Forward" in row["Direction"] else "red",
-            fill=True,
-        ).add_to(m)
+        # Show MAP (Streamlit built-in map)
+        st.map(map_df)
 
-    st_folium(m, width=1200, height=450)
+        # Show stop list
+        st.write(
+            route_stops[["stop_id", "stop_name", "stop_lat", "stop_lon"]]
+        )
 
-    # ------------ CLEAN TIMINGS TABLE ------------
-    st.markdown(f"<div class='section-title'>⏱ Stop Timings (Sequence Only)</div>", unsafe_allow_html=True)
+    # ---------------- TIMINGS TAB -----------------
+    if selected_tab == "timings":
 
-    timings_clean = df[["stop_name", "Direction"]].drop_duplicates()
-    st.write(timings_clean)
+        st.markdown("### 🕒 Route Stop Timings")
+
+        route_timings = stop_times[stop_times["trip_id"].isin(route_trip_ids)]
+
+        # Remove arrival/departure columns
+        clean_timings = route_timings[["trip_id", "stop_id", "stop_sequence"]]
+
+        st.write(clean_timings)
