@@ -14,6 +14,11 @@ def load_data():
     stops = pd.read_csv("stops.txt")
     trips = pd.read_csv("trips.txt")
     stop_times = pd.read_csv("stop_times.txt")
+
+    # Convert lat/lon to float for map
+    stops["stop_lat"] = stops["stop_lat"].astype(float)
+    stops["stop_lon"] = stops["stop_lon"].astype(float)
+
     return routes, stops, trips, stop_times
 
 routes, stops, trips, stop_times = load_data()
@@ -25,9 +30,8 @@ st.markdown("""
 <hr>
 """, unsafe_allow_html=True)
 
-# ---------------- METRIC BOXES -------------------
+# ---------------- METRICS -------------------
 c1, c2, c3, c4 = st.columns(4)
-
 c1.metric("Total Routes", len(routes))
 c2.metric("Total Trips", len(trips))
 c3.metric("Total Stops", len(stops))
@@ -35,40 +39,37 @@ c4.metric("Stop Times", len(stop_times))
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# ---------------- ROUTES TABLE -------------------
+# ---------------- ROUTES LIST (CLEAN) -------------------
 st.subheader("📘 Routes List")
 
-# Table with only route_id + buttons
 clean_routes = pd.DataFrame()
-clean_routes["route_id"] = routes["route_id"]
+clean_routes["Route ID"] = routes["route_id"]
 
-# Stylish buttons (blue/green)
 clean_routes["Stops"] = [
-    f"<a href='?route={rid}&tab=stops' style='
-        padding:6px 12px;
-        background:#0066FF;
-        color:white;
-        border-radius:6px;
-        text-decoration:none;
-        font-weight:600;'>View Stops</a>"
+    f"""
+    <a href='/?route={rid}&tab=stops' 
+       style='background:#007bff; padding:6px 12px; color:white; 
+       border-radius:6px; text-decoration:none; font-weight:600;'>
+       View Stops
+    </a>
+    """
     for rid in routes["route_id"]
 ]
 
 clean_routes["Timings"] = [
-    f"<a href='?route={rid}&tab=timings' style='
-        padding:6px 12px;
-        background:#009a44;
-        color:white;
-        border-radius:6px;
-        text-decoration:none;
-        font-weight:600;'>View Timings</a>"
+    f"""
+    <a href='/?route={rid}&tab=timings' 
+       style='background:#28a745; padding:6px 12px; color:white; 
+       border-radius:6px; text-decoration:none; font-weight:600;'>
+       View Timings
+    </a>
+    """
     for rid in routes["route_id"]
 ]
 
-# Display table
 st.write(clean_routes.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-# -------------- ROUTE SELECTION (FROM URL) -----------------
+# ---------------- URL PARAM HANDLING -------------------
 query = st.experimental_get_query_params()
 
 if "route" in query:
@@ -78,39 +79,41 @@ if "route" in query:
     st.markdown("<hr>", unsafe_allow_html=True)
     st.subheader(f"🚌 Route: {selected_route}")
 
-    # Filter trips of selected route
-    route_trip_ids = trips[trips["route_id"] == selected_route]["trip_id"].unique()
+    # Get trip IDs for this route
+    r_trips = trips[trips["route_id"] == selected_route]["trip_id"].unique()
 
-    # Filter stops used by these trips
-    used_stop_ids = stop_times[stop_times["trip_id"].isin(route_trip_ids)]["stop_id"].unique()
-    route_stops = stops[stops["stop_id"].isin(used_stop_ids)]
+    # Get stop IDs
+    stop_ids = stop_times[stop_times["trip_id"].isin(r_trips)]["stop_id"].unique()
+    route_stops = stops[stops["stop_id"].isin(stop_ids]]
 
-    # ---------------- STOPS TAB -----------------
+    # ---------------- SHOW STOPS -------------------
     if selected_tab == "stops":
+        st.markdown("## 📍 Route Stops (Map + List)")
 
-        st.markdown("### 📍 Route Stops (Map + List)")
+        if len(route_stops) == 0:
+            st.warning("No stops found for this route.")
+        else:
+            # Prepare map dataframe
+            map_df = pd.DataFrame({
+                "lat": route_stops["stop_lat"],
+                "lon": route_stops["stop_lon"]
+            })
 
-        # Prepare map df
-        map_df = route_stops[["stop_lat", "stop_lon"]].rename(
-            columns={"stop_lat": "lat", "stop_lon": "lon"}
-        )
+            # Show map
+            st.map(map_df)
 
-        # Show MAP (Streamlit built-in map)
-        st.map(map_df)
+            # Show table
+            st.dataframe(
+                route_stops[["stop_id", "stop_name", "stop_lat", "stop_lon"]],
+                use_container_width=True
+            )
 
-        # Show stop list
-        st.write(
-            route_stops[["stop_id", "stop_name", "stop_lat", "stop_lon"]]
-        )
-
-    # ---------------- TIMINGS TAB -----------------
+    # ---------------- SHOW TIMINGS -------------------
     if selected_tab == "timings":
+        st.markdown("## 🕒 Stop Timings")
 
-        st.markdown("### 🕒 Route Stop Timings")
+        r_times = stop_times[stop_times["trip_id"].isin(r_trips)]
 
-        route_timings = stop_times[stop_times["trip_id"].isin(route_trip_ids)]
+        clean_times = r_times[["trip_id", "stop_id", "stop_sequence"]]
 
-        # Remove arrival/departure columns
-        clean_timings = route_timings[["trip_id", "stop_id", "stop_sequence"]]
-
-        st.write(clean_timings)
+        st.dataframe(clean_times, use_container_width=True)
